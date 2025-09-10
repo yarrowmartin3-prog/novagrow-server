@@ -39,3 +39,29 @@ export default async function handler(req){
       method:"POST",
       headers:{ "Authorization":`Bearer ${apiKey}`, "Content-Type":"application/json" },
       body: JSON.stringify({ model:"gpt-4o-mini", temperature:0.6, messages:[ {role:"system",content:system}, {role:"user",content:user} ] })
+    });
+    if(!r.ok) return new Response(JSON.stringify({ ok:false, error:"openai "+r.status, detail: await r.text() }), { status:500 });
+
+    let txt = (await r.json()).choices?.[0]?.message?.content?.trim() || "[]";
+    txt = txt.replace(/^```json\s*/i,"").replace(/```$/,"");
+    let posts = []; try{ posts = JSON.parse(txt); }catch{}
+    posts = Array.isArray(posts) ? posts : [];
+
+    for(const p of posts){
+      p.title = clean(p.title);
+      p.slug  = (p.slug||"").toLowerCase().replace(/[^a-z0-9\-]/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"") || "post";
+      p.excerpt = clean(p.excerpt||"");
+      p.tags = Array.isArray(p.tags) ? p.tags.slice(0,6) : [];
+      p.products = Array.isArray(p.products) ? p.products.slice(0,3) : [];
+      p.affiliate = (tag && p.products.length) ? p.products.map(k => ({
+        label: k, url: `https://www.amazon.ca/s?k=${encodeURIComponent(k)}&tag=${tag}`
+      })) : [];
+    }
+
+    return new Response(JSON.stringify({ ok:true, site, posts }, null, 2), {
+      status:200, headers:{ "Content-Type":"application/json", "Cache-Control":"public, max-age=900" }
+    });
+  }catch(e){
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500 });
+  }
+}
